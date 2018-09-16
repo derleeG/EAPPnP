@@ -1,24 +1,11 @@
 # modified EPPnP algorithm to handle unknown scales in the 3D model
-# Using PyTorch as linear algebra backend
-import torch
 import numpy as np
-import numba
+from ..lib import pyprocrutes as procrutes
 
 
 class EAPPnPSolver:
     def __init__(self):
-        self.template = None
-        self.is_np = True
-
-
-    def sync_data(self, P, p):
-
-        if self.is_np:
-            pass
-        else:
-            self.template = P
-            p = p.to(self.template)
-        return P, p
+        pass
 
 
     def EAPPnP(self, P, p):
@@ -27,17 +14,12 @@ class EAPPnPSolver:
         p: nx2 matrix, points in camera coordinates
         '''
 
-        self.is_np = type(P) == np.ndarray
-
         P, p = self.sync_data(P, p)
         cP, mP = self.centralize(P, 0)
 
         R, T, S, err = self._EAPPnP(cP, p)
 
-        if self.is_np:
-            T = T - np.matmul(R, S*np.reshape(mP, (-1, 1)))
-        else:
-            T = T - R.mm(S*mP.view(-1, 1))
+        T = T - np.matmul(R, S*np.reshape(mP, (-1, 1)))
 
         return R, T, S, err
 
@@ -200,108 +182,20 @@ class EAPPnPSolver:
         return R, T, S, err
 
 
-    def anisotropic_procrutes(self, X, Y, S=None, iter_num=10):
-        '''
-        solve argmin{R, S} ||RSX-Y||^2 such that RTR = I and S is a diagonal matrix
-        '''
-
-        if self.is_np:
-            if S is None:
-                S = np.ones(3)
-            else:
-                S = np.reshape(S, 3)
-
-            X_norm = np.power(X, 2).sum(-1)
-            non_planar = X_norm != 0
-            YXt = np.matmul(Y, X.transpose())
-
-            err = float('inf')
-            for it in range(iter_num):
-                R = self.orthogonal_polar_factor(YXt*S)
-                S[non_planar] = np.abs(((YXt*R).sum(0)[non_planar] / X_norm[non_planar]))
-                newerr = self.norm(np.matmul(R.transpose(), Y)/np.reshape(S, (3, 1)) - X)
-                if newerr > err * 0.5 and it > 1:
-                    break
-                else:
-                    err = newerr
-
-            S = np.reshape(S, (3, 1))
-        else:
-            if S is None:
-                S = torch.ones(3).to(X)
-            else:
-                S = S.view(3)
-
-            # precompute value
-            X_norm = X.pow(2).sum(-1)
-            non_planar = X_norm != 0
-            YXt = Y.mm(X.t())
-
-            err = float('inf')
-            for it in range(iter_num):
-                R = self.orthogonal_polar_factor(YXt*S)
-                S[non_planar] = ((YXt*R).sum(0)[non_planar] / X_norm[non_planar]).abs()
-                newerr = self.norm(R.t().mm(Y)/S.view(3, 1) - X)
-                if newerr > err * 0.5 and it > 1:
-                    break
-                else:
-                    err = newerr
-
-            S = S.view(3, 1)
-
-        return R, S
-
-
-    def procrutes(self, X, Y):
-        '''
-        solve argmin{R} ||RX-Y||^2 such that det(R) = 1
-        '''
-        if self.is_np:
-            YXt = np.matmul(Y, X.transpose())
-        else:
-            YXt = Y.mm(X.t())
-
-        return self.orthogonal_polar_factor(YXt)
-
-    @numba.jit()
-    def orthogonal_polar_factor(self, A):
-
-        if self.is_np:
-            U, D, Vt = np.linalg.svd(A)
-            D = np.ones(3)
-            D[-1] = np.sign(np.linalg.det(np.matmul(U, Vt)))
-            R = np.matmul(np.matmul(U, np.diag(D)), Vt)
-        else:
-            U, D, V = torch.svd(A)
-            D = torch.ones_like(D)
-            D[-1] = U.mm(V.t()).det().sign()
-            R = U.mm(torch.diag(D)).mm(V.t())
-
-        return R
-
-
     def least_square(self, A, b):
         '''
         solve argmin{x} ||Ax - b||^2 for over constrained A
         '''
 
-        if self.is_np:
-            x = np.linalg.lstsq(A, b, rcond=None)[0]
-        else:
-            Q, R = A.qr()
-            x, _ = torch.trtrs(Q.t().mm(b), R)
-        return x
+        return np.linalg.lstsq(A, b, rcond=None)[0]
 
 
     def norm(self, x):
-        if self.is_np:
-            return np.sqrt(np.power(x, 2).sum())
-        else:
-            return x.pow(2).sum().sqrt()
+        return np.sqrt(np.power(x, 2).sum())
+
 
     def centralize(self, X, dim=None):
-
-        mX = X.mean(dim, keepdims=True) if self.is_np else X.mean(dim, True)
+        mX = X.mean(dim, keepdims=True)
         cX = X - mX
 
         return cX, mX
