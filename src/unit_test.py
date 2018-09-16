@@ -1,7 +1,8 @@
-import EAPPnP
 import numpy as np
+from timeit import default_timer as timer
+import EAPPnP
 
-
+N = 10000
 def gen_stretched_transform(n):
     R = np.random.randn(n, 3, 3).astype(np.float32)
     S = np.exp(np.random.randn(n, 3).astype(np.float32))
@@ -11,9 +12,9 @@ def gen_stretched_transform(n):
     for r, s, t, x, y in zip(R, S, T, X, Y):
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
         y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 10
+        y[-1, :] += 5
 
-    Y = Y[:,:-1,:]/Y[:,-1,:]
+    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
     Y = np.swapaxes(Y, -1, -2)
 
@@ -23,9 +24,11 @@ def get_func(method):
     if method == 'EAPPnP':
         func = EAPPnP.EAPPnP
         data_func = gen_stretched_transform
+        transform = lambda x, o: np.matmul(o[0]*o[2], x.T) + o[1]
+        project = lambda x: x[:-1, :]/x[-1,:]
         stat_func = lambda x, y, o: (x, y, *o[:-1], \
-                np.linalg.norm(np.matmul(o[0]*o[2], x) + o[1] - y)/\
-                np.linalg.norm(x))
+                np.linalg.norm(project(transform(x, o)) - y.T)/\
+                np.linalg.norm(y-y.mean(0)))
         print_fmt = 'matrix X:\n{}\nmatrix Y:\n{}\nmatrix R:\n{}\n' \
                    +'matrix T:\n{}\nmatrix S:\n{}\nerror: {}'
 
@@ -91,6 +94,8 @@ def benchmark_method_speed(method):
 
 if __name__ == '__main__':
     test_method_correctness('EAPPnP')
+    benchmark_method_accuracy('EAPPnP')
+    benchmark_method_speed('EAPPnP')
 
 
 

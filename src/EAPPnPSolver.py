@@ -13,7 +13,7 @@ def EAPPnP(P, p):
     M, Cw, Alph = prepare_data(cP, p)
     Km = kernel_noise(M, 4)
     R, T, S, err = kernel_PnP(Cw, Km)
-    T = T - np.matmul(R, S*np.reshape(mP, (-1, 1)))
+    T = T - np.matmul(R*S, np.reshape(mP, (-1, 1)))
 
     return R, T, S, err
 
@@ -60,7 +60,7 @@ def _EAPPnP_planar(self, P, p):
 
 def prepare_data(P, p):
 
-    Cw = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]])
+    Cw = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]], dtype=np.float32)
     Alph = np.concatenate((P, 1-np.sum(P, -1, keepdims=True)), -1)
     _Alph = np.reshape(Alph, (-1, 1))
     _Alph_u = np.reshape((Alph*np.reshape(p[:,0], (-1, 1))), (-1, 1))
@@ -69,7 +69,7 @@ def prepare_data(P, p):
     M = np.concatenate(
             (np.reshape(np.concatenate((_Alph, np.zeros(_Alph.shape), -_Alph_u), -1), (-1, 12)),
              np.reshape(np.concatenate((np.zeros(_Alph.shape), _Alph, -_Alph_v), -1), (-1, 12))),
-            0)
+            0).astype(np.float32)
 
     return M, Cw, Alph
 
@@ -92,21 +92,25 @@ def kernel_PnP(Cw, Km, iter_num=10):
         Y = -Y
 
     cY, mY = centralize(Y, -1)
-    R, S = procrutes.anisotropic_procrutes(cX, cY, 10)
+    R, S = procrutes.anisotropic_procrutes(cX, cY, iter_num=20)
+
 
     for it in range(iter_num):
         Y = np.matmul(R*S, cX) + mY
 
+
         # project into the effective null space of M
-        coef = np.linalg.lstsq(Km, Y.T.reshape(-1, 1), rcond=None)[0]
+        coef = np.linalg.lstsq(Km, (Y.T).reshape(-1, 1), rcond=None)[0]
         Y = np.matmul(Km, coef).reshape(-1, 3).T
-        newerr = np.linalg.norm(np.matmul(R.T/S, Y-Y.mean(-1, keepdims=True)) - cX)
+        newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True))\
+                /S.reshape(-1, 1) - cX)
 
         if it > 1 and newerr > err:
             break
         err = newerr
         cY, mY = centralize(Y, -1)
-        R, S = procrutes.anisotropic_procrutes(cX, cY, S, 10)
+        R, S = procrutes.np_anisotropic_procrutes(cX, cY, S, 5)
+        print(R.dtype, S.dtype)
 
     T = mY - np.matmul(R*S, mX)
     T, S = T/S[0], S/S[0]
