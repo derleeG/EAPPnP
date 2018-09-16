@@ -109,8 +109,7 @@ def kernel_PnP(Cw, Km, iter_num=10):
             break
         err = newerr
         cY, mY = centralize(Y, -1)
-        R, S = procrutes.np_anisotropic_procrutes(cX, cY, S, 5)
-        print(R.dtype, S.dtype)
+        R, S = procrutes.anisotropic_procrutes(cX, cY, S, 5)
 
     T = mY - np.matmul(R*S, mX)
     T, S = T/S[0], S/S[0]
