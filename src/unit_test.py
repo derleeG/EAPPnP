@@ -2,9 +2,10 @@ import numpy as np
 from timeit import default_timer as timer
 import EAPPnP
 
-N = 10000
+N = 1000
 
 def gen_rigid_transform(n):
+    np.random.seed(2018)
     R = np.random.randn(n, 3, 3).astype(np.float32)
     T = np.random.randn(n, 3, 1).astype(np.float32)
     X = np.random.randn(n, 3, 80).astype(np.float32)
@@ -12,7 +13,7 @@ def gen_rigid_transform(n):
     for r, t, x, y in zip(R, T, X, Y):
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
         y[...] = np.matmul(r, x) + t
-        y[-1, :] += 400
+        y[-1, :] += 10
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
@@ -31,7 +32,7 @@ def gen_stretched_transform(n):
         s[0] = 1
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
         y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 400
+        y[-1, :] += 40000
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
@@ -43,7 +44,7 @@ def gen_stretched_transform(n):
 def get_func(method):
     if method == 'EAPPnP':
         func = EAPPnP.EAPPnP
-        data_func = gen_stretched_transform
+        data_func = gen_rigid_transform
         transform = lambda x, o: np.matmul(o[0]*o[2], x.T) + o[1]
         project = lambda x: x[:-1, :]/x[-1,:]
         stat_func = lambda x, y, o: (x, y,\

@@ -18,6 +18,25 @@ def EAPPnP(P, p):
     return R, T, S, err
 
 
+def EAPPnP_planar(P, p):
+    # degenerative case
+
+    cP, mP = centralize(P, 0)
+    M, Cw, Alph = prepare_data(cP, p)
+
+    # reduce the dimension of effective null space
+    dim = np.argmin(np.power(P, 2).sum(0))
+    idx = [x for x in range(4) if x != dim]
+    idx3x = [x for x in range(12) if x // 3 != dim]
+    M, Cw, Alph = M[:, idx3x], Cw[idx, :], Alph[:, idx]
+
+    Km = kernel_noise(M, 3)
+    R, T, S, err = generalized_kernel_PnP(Cw, Km)
+    T = T - np.matmul(R*S, np.reshape(mP, (-1, 1)))
+
+    return R, T, S, err
+
+
 def EPPnP(P, p):
     '''
     P: nx3 matrix, points in world coordinates
@@ -33,47 +52,23 @@ def EPPnP(P, p):
     return R, T, err
 
 
-
-
-
-def EAPPnP_planar(self, P, p):
+def EPPnP_planar(P, p):
     # degenerative case
-    self.is_np = type(P) == np.ndarray
-    P, p = self.sync_data(P, p)
-    cP, mP = self.centralize(P, 0)
 
-    R, T, S, err = self._EAPPnP_planar(cP, p)
+    cP, mP = centralize(P, 0)
+    M, Cw, Alph = prepare_data(cP, p)
 
-    if self.is_np:
-        T = T - np.matmul(R, S*np.reshape(mP, (-1, 1)))
-    else:
-        T = T - R.mm(S*mP.view(-1, 1))
-
-    return R, T, S, err
-
-
-def _EAPPnP_planar(self, P, p):
-
-    M, Cw, Alph = self.prepare_data(P, p)
-
-    if self.is_np:
-        dim = np.argmin(np.power(P, 2).sum(0))
-    else:
-        dim = torch.argmin(P.pow(2).sum(0))
-
+    # reduce the dimension of effective null space
+    dim = np.argmin(np.power(P, 2).sum(0))
     idx = [x for x in range(4) if x != dim]
-    idx3x = []
-    for i in idx:
-        idx3x.extend([i*3 + x for x in range(3)])
+    idx3x = [x for x in range(12) if x // 3 != dim]
+    M, Cw, Alph = M[:, idx3x], Cw[idx, :], Alph[:, idx]
 
-    M = M[:, idx3x]
-    Cw = Cw[idx, :]
-    Alph = Alph[:, idx]
+    Km = kernel_noise(M, 3)
+    R, T, err = kernel_PnP(Cw, Km)
+    T = T - np.matmul(R, np.reshape(mP, (-1, 1)))
 
-    Km = self.kernel_noise(M, 3)
-    R, T, S, err = self.kernel_PnP(Cw, Km)
-
-    return R, T, S, err
+    return R, T, err
 
 
 def prepare_data(P, p):
@@ -123,7 +118,7 @@ def kernel_PnP(Cw, Km, iter_num=10):
         # project into the effective null space of M
         Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
         newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True)) - cX)
-        if it > 1 and newerr > err*0.99:
+        if it > 1 and newerr > err*0.95:
             break
         err = newerr
         cY, mY = centralize(Y, -1)
@@ -134,7 +129,7 @@ def kernel_PnP(Cw, Km, iter_num=10):
     return R, T, err
 
 
-def generalized_kernel_PnP(Cw, Km, iter_num=100):
+def generalized_kernel_PnP(Cw, Km, iter_num=10):
     '''
     find R, t and S such that ||RSCw + t - Cc||^2 is minimized
     '''
@@ -151,7 +146,7 @@ def generalized_kernel_PnP(Cw, Km, iter_num=100):
     cY, mY = centralize(Y, -1)
     Ynorm = np.linalg.norm(cY)
     nY = cY/Ynorm
-    R, S = procrutes.anisotropic_procrutes(cX, nY, iter_num=15)
+    R, S = procrutes.anisotropic_procrutes(cX, nY)
     S *= Ynorm
 
     for it in range(iter_num):
@@ -161,7 +156,7 @@ def generalized_kernel_PnP(Cw, Km, iter_num=100):
         # project into the effective null space of M
         Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
         newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True))/S.reshape(-1, 1) - cX)
-        if it > 1 and newerr > err*0.99:
+        if it > 1 and newerr > err*0.95:
             break
         err = newerr
         cY, mY = centralize(Y, -1)
