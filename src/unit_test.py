@@ -2,11 +2,12 @@ import numpy as np
 from timeit import default_timer as timer
 import EAPPnP
 
-N = 100
+N = 10000
+
 def gen_rigid_transform(n):
     R = np.random.randn(n, 3, 3).astype(np.float32)
     T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 10).astype(np.float32)
+    X = np.random.randn(n, 3, 80).astype(np.float32)
     Y = np.zeros_like(X)
     for r, t, x, y in zip(R, T, X, Y):
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
@@ -24,13 +25,13 @@ def gen_stretched_transform(n):
     R = np.random.randn(n, 3, 3).astype(np.float32)
     S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
     T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 10).astype(np.float32)
+    X = np.random.randn(n, 3, 80).astype(np.float32)
     Y = np.zeros_like(X)
     for r, s, t, x, y in zip(R, S, T, X, Y):
         s[0] = 1
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
         y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 4
+        y[-1, :] += 400
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
@@ -42,7 +43,7 @@ def gen_stretched_transform(n):
 def get_func(method):
     if method == 'EAPPnP':
         func = EAPPnP.EAPPnP
-        data_func = gen_rigid_transform
+        data_func = gen_stretched_transform
         transform = lambda x, o: np.matmul(o[0]*o[2], x.T) + o[1]
         project = lambda x: x[:-1, :]/x[-1,:]
         stat_func = lambda x, y, o: (x, y,\
@@ -126,11 +127,11 @@ def benchmark_method_speed(method):
 
 if __name__ == '__main__':
     #test_method_correctness('EPPnP')
-    #benchmark_method_accuracy('EPPnP')
-    #benchmark_method_speed('EPPnP')
+    benchmark_method_accuracy('EPPnP')
+    benchmark_method_speed('EPPnP')
     #test_method_correctness('EAPPnP')
     benchmark_method_accuracy('EAPPnP')
-    #benchmark_method_speed('EAPPnP')
+    benchmark_method_speed('EAPPnP')
 
 
 

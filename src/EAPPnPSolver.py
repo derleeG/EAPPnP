@@ -102,6 +102,8 @@ def kernel_PnP(Cw, Km, iter_num=10):
     find R, t and S such that ||RSCw + t - Cc||^2 is minimized
     '''
 
+    KmQ, _ = np.linalg.qr(Km)
+
     X = Cw.T
     cX, mX = centralize(X, -1)
     Y = Km[:,-1].reshape(-1, 3).T
@@ -110,16 +112,13 @@ def kernel_PnP(Cw, Km, iter_num=10):
         Y = -Y
 
     cY, mY = centralize(Y, -1)
-    scale = np.linalg.norm(cX)/np.linalg.norm(cY)
-    cY, mY = scale*cY, scale*mY
-
-    R = procrutes.procrutes(cX, cY)
-
-
-    KmQ, _ = np.linalg.qr(Km)
+    Ynorm = np.linalg.norm(cY)
+    nY = cY/Ynorm
+    R, s = procrutes.isotropic_procrutes(cX, nY)
+    s *= Ynorm
 
     for it in range(iter_num):
-        Y = np.matmul(R, cX) + mY
+        Y = np.matmul(R, cX) + mY/s
 
         # project into the effective null space of M
         Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
@@ -128,9 +127,9 @@ def kernel_PnP(Cw, Km, iter_num=10):
             break
         err = newerr
         cY, mY = centralize(Y, -1)
-        R = procrutes.procrutes(cX, cY)
+        R, s = procrutes.isotropic_procrutes(cX, cY)
 
-    T = mY - np.matmul(R, mX)
+    T = mY/s - np.matmul(R, mX)
 
     return R, T, err
 
@@ -140,6 +139,8 @@ def generalized_kernel_PnP(Cw, Km, iter_num=100):
     find R, t and S such that ||RSCw + t - Cc||^2 is minimized
     '''
 
+    KmQ, _ = np.linalg.qr(Km)
+
     X = Cw.T
     cX, mX = centralize(X, -1)
     Y = Km[:,-1].reshape(-1, 3).T
@@ -148,38 +149,26 @@ def generalized_kernel_PnP(Cw, Km, iter_num=100):
         Y = -Y
 
     cY, mY = centralize(Y, -1)
-    R, S = procrutes.anisotropic_procrutes(cX, cY, iter_num=30)
-
-    
-    e = np.linalg.norm(np.matmul(R*S, cX) -cY)
-    vis = e > 1e-7
-    if vis:
-        print('init error: {}'.format(e))
-    KmQ, _ = np.linalg.qr(Km)
+    Ynorm = np.linalg.norm(cY)
+    nY = cY/Ynorm
+    R, S = procrutes.anisotropic_procrutes(cX, nY, iter_num=15)
+    S *= Ynorm
 
     for it in range(iter_num):
-        Y = np.matmul(R*S, cX) + mY
+        scale = 1/(1/S).mean()
+        Y, S = (np.matmul(R*S, cX) + mY)/scale, S/scale
 
         # project into the effective null space of M
-        Y2 = Y
         Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
-        if vis:
-            print('project: {}'.format(np.linalg.norm(Y2-Y)))
-            print(S)
         newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True))/S.reshape(-1, 1) - cX)
-        if vis:
-            print(newerr)
         if it > 1 and newerr > err*0.99:
             break
         err = newerr
         cY, mY = centralize(Y, -1)
-        R, S = procrutes.anisotropic_procrutes(cX, cY, S, 30)
-        if vis:
-            print('error: {}'.format(np.linalg.norm(np.matmul(R*S, cX) -cY)))
-    err = 0
-    R, S = procrutes.anisotropic_procrutes(cX, cY, S, 30)
-    T = mY - np.matmul(R*S, mX)
-    T, S = T/S[0], S/S[0]
+        R, S = procrutes.anisotropic_procrutes(cX, cY, S, 5)
+
+    R, S = procrutes.anisotropic_procrutes(cX, cY, S, 15)
+    T, S = (mY - np.matmul(R*S, mX))/S[0], S/S[0]
 
     return R, T, S, err
 
