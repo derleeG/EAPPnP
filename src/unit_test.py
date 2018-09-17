@@ -2,17 +2,16 @@ import numpy as np
 from timeit import default_timer as timer
 import EAPPnP
 
-N = 10000
-def gen_stretched_transform(n):
+N = 100
+def gen_rigid_transform(n):
     R = np.random.randn(n, 3, 3).astype(np.float32)
-    S = np.exp(np.random.randn(n, 3).astype(np.float32))
     T = np.random.randn(n, 3, 1).astype(np.float32)
     X = np.random.randn(n, 3, 10).astype(np.float32)
     Y = np.zeros_like(X)
-    for r, s, t, x, y in zip(R, S, T, X, Y):
+    for r, t, x, y in zip(R, T, X, Y):
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
-        y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 5
+        y[...] = np.matmul(r, x) + t
+        y[-1, :] += 400
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
@@ -20,17 +19,50 @@ def gen_stretched_transform(n):
 
     return X, Y
 
+
+def gen_stretched_transform(n):
+    R = np.random.randn(n, 3, 3).astype(np.float32)
+    S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
+    T = np.random.randn(n, 3, 1).astype(np.float32)
+    X = np.random.randn(n, 3, 10).astype(np.float32)
+    Y = np.zeros_like(X)
+    for r, s, t, x, y in zip(R, S, T, X, Y):
+        s[0] = 1
+        r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
+        y[...] = np.matmul(r*s, x) + t
+        y[-1, :] += 4
+
+    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
+    X = np.swapaxes(X, -1, -2)
+    Y = np.swapaxes(Y, -1, -2)
+
+    return X, Y
+
+
 def get_func(method):
     if method == 'EAPPnP':
         func = EAPPnP.EAPPnP
-        data_func = gen_stretched_transform
+        data_func = gen_rigid_transform
         transform = lambda x, o: np.matmul(o[0]*o[2], x.T) + o[1]
         project = lambda x: x[:-1, :]/x[-1,:]
-        stat_func = lambda x, y, o: (x, y, *o[:-1], \
+        stat_func = lambda x, y, o: (x, y,\
+                project(transform(x, o)).T, *o[:-1], \
                 np.linalg.norm(project(transform(x, o)) - y.T)/\
                 np.linalg.norm(y-y.mean(0)))
-        print_fmt = 'matrix X:\n{}\nmatrix Y:\n{}\nmatrix R:\n{}\n' \
+        print_fmt = 'matrix X:\n{}\nmatrix Y:\n{}\nmatrix Yp:\n{}\nmatrix R:\n{}\n' \
                    +'matrix T:\n{}\nmatrix S:\n{}\nerror: {}'
+
+    elif method == 'EPPnP':
+        func = EAPPnP.EPPnP
+        data_func = gen_rigid_transform
+        transform = lambda x, o: np.matmul(o[0], x.T) + o[1]
+        project = lambda x: x[:-1, :]/x[-1,:]
+        stat_func = lambda x, y, o: (x, y,\
+                project(transform(x, o)).T, *o[:-1], \
+                np.linalg.norm(project(transform(x, o)) - y.T)/\
+                np.linalg.norm(y-y.mean(0)))
+        print_fmt = 'matrix X:\n{}\nmatrix Y:\n{}\nmatrix Yp:\n{}\nmatrix R:\n{}\n' \
+                   +'matrix T:\n{}\nerror: {}'
 
     return data_func, func, stat_func, print_fmt
 
@@ -93,9 +125,12 @@ def benchmark_method_speed(method):
 
 
 if __name__ == '__main__':
-    test_method_correctness('EAPPnP')
+    #test_method_correctness('EPPnP')
+    #benchmark_method_accuracy('EPPnP')
+    #benchmark_method_speed('EPPnP')
+    #test_method_correctness('EAPPnP')
     benchmark_method_accuracy('EAPPnP')
-    benchmark_method_speed('EAPPnP')
+    #benchmark_method_speed('EAPPnP')
 
 
 
