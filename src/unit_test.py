@@ -4,6 +4,17 @@ import EAPPnP
 
 N = 1000
 
+
+def flatten(X):
+    mX = np.mean(X, -1, keepdims=True)
+    cX = X - mX
+    _, v = np.linalg.eigh(np.matmul(cX, cX.T))
+    v = v[:, 1:]
+    X = mX + np.matmul(v, np.matmul(v.T, cX))
+
+    return X
+
+
 def gen_rigid_transform(n):
     np.random.seed(2018)
     R = np.random.randn(n, 3, 3).astype(np.float32)
@@ -22,6 +33,25 @@ def gen_rigid_transform(n):
     return X, Y
 
 
+def gen_rigid_transform_planar(n):
+    np.random.seed(2018)
+    R = np.random.randn(n, 3, 3).astype(np.float32)
+    T = np.random.randn(n, 3, 1).astype(np.float32)
+    X = np.random.randn(n, 3, 80).astype(np.float32)
+    Y = np.zeros_like(X)
+    for r, t, x, y in zip(R, T, X, Y):
+        x[...] = flatten(x)
+        r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
+        y[...] = np.matmul(r, x) + t
+        y[-1, :] += 10
+
+    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
+    X = np.swapaxes(X, -1, -2)
+    Y = np.swapaxes(Y, -1, -2)
+
+    return X, Y
+
+
 def gen_stretched_transform(n):
     R = np.random.randn(n, 3, 3).astype(np.float32)
     S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
@@ -29,6 +59,26 @@ def gen_stretched_transform(n):
     X = np.random.randn(n, 3, 80).astype(np.float32)
     Y = np.zeros_like(X)
     for r, s, t, x, y in zip(R, S, T, X, Y):
+        s[0] = 1
+        r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
+        y[...] = np.matmul(r*s, x) + t
+        y[-1, :] += 40000
+
+    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
+    X = np.swapaxes(X, -1, -2)
+    Y = np.swapaxes(Y, -1, -2)
+
+    return X, Y
+
+
+def gen_stretched_transformi_planar(n):
+    R = np.random.randn(n, 3, 3).astype(np.float32)
+    S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
+    T = np.random.randn(n, 3, 1).astype(np.float32)
+    X = np.random.randn(n, 3, 80).astype(np.float32)
+    Y = np.zeros_like(X)
+    for r, s, t, x, y in zip(R, S, T, X, Y):
+        x[...] = flatten(x)
         s[0] = 1
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
         y[...] = np.matmul(r*s, x) + t
@@ -133,7 +183,6 @@ if __name__ == '__main__':
     #test_method_correctness('EAPPnP')
     benchmark_method_accuracy('EAPPnP')
     benchmark_method_speed('EAPPnP')
-
 
 
 

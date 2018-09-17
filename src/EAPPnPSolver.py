@@ -18,25 +18,6 @@ def EAPPnP(P, p):
     return R, T, S, err
 
 
-def EAPPnP_planar(P, p):
-    # degenerative case
-
-    cP, mP = centralize(P, 0)
-    M, Cw, Alph = prepare_data(cP, p)
-
-    # reduce the dimension of effective null space
-    dim = np.argmin(np.power(P, 2).sum(0))
-    idx = [x for x in range(4) if x != dim]
-    idx3x = [x for x in range(12) if x // 3 != dim]
-    M, Cw, Alph = M[:, idx3x], Cw[idx, :], Alph[:, idx]
-
-    Km = kernel_noise(M, 3)
-    R, T, S, err = generalized_kernel_PnP(Cw, Km)
-    T = T - np.matmul(R*S, np.reshape(mP, (-1, 1)))
-
-    return R, T, S, err
-
-
 def EPPnP(P, p):
     '''
     P: nx3 matrix, points in world coordinates
@@ -46,25 +27,6 @@ def EPPnP(P, p):
     cP, mP = centralize(P, 0)
     M, Cw, Alph = prepare_data(cP, p)
     Km = kernel_noise(M, 4)
-    R, T, err = kernel_PnP(Cw, Km)
-    T = T - np.matmul(R, np.reshape(mP, (-1, 1)))
-
-    return R, T, err
-
-
-def EPPnP_planar(P, p):
-    # degenerative case
-
-    cP, mP = centralize(P, 0)
-    M, Cw, Alph = prepare_data(cP, p)
-
-    # reduce the dimension of effective null space
-    dim = np.argmin(np.power(P, 2).sum(0))
-    idx = [x for x in range(4) if x != dim]
-    idx3x = [x for x in range(12) if x // 3 != dim]
-    M, Cw, Alph = M[:, idx3x], Cw[idx, :], Alph[:, idx]
-
-    Km = kernel_noise(M, 3)
     R, T, err = kernel_PnP(Cw, Km)
     T = T - np.matmul(R, np.reshape(mP, (-1, 1)))
 
