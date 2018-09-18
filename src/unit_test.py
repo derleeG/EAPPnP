@@ -59,17 +59,18 @@ def gen_stretched_transform(n):
 
 
 def gen_stretched_transform_with_gt(n):
-    np.random.seed(2018)
     R = uniform((n, 3, 3))
     S = np.power(2, uniform((n, 3)))
     T = uniform((n, 3, 1))
-    X = uniform((n, 3, M), (-2, 2))
-    Y = np.zeros_like(X)
+    Y = uniform((n, 3, M), (-2, 2))
+    X = np.zeros_like(Y)
+
     for r, s, t, x, y in zip(R, S, T, X, Y):
         s[0] = 1
+        y[-1, :] += 6
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
-        t[-1] += 6
-        y[...] = np.matmul(r*s, x) + t
+        t[...] = np.mean(y, -1, keepdims=True)
+        x[...] = np.matmul(r.T, y-t)/s.reshape(-1, 1)
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)

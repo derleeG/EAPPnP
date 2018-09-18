@@ -37,7 +37,7 @@ if __name__ == '__main__':
         ratio = np.ones_like(sigma)/sigma.size
 
         # for comparison we are testing on isotropic data
-        P, p, R, T = iso_data(test.N)
+        P, p, R, T, _ = aniso_data(test.N)
         noise = test.mix_gaussian_noise(p.shape, sigma, ratio)
         datas = (P, p + noise, R, T)
 
