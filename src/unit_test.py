@@ -61,7 +61,7 @@ def gen_stretched_transform(n):
 def gen_stretched_transform_with_gt(n):
     np.random.seed(2018)
     R = uniform((n, 3, 3))
-    S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
+    S = np.power(2, uniform((n, 3)))
     T = uniform((n, 3, 1))
     X = uniform((n, 3, M), (-2, 2))
     Y = np.zeros_like(X)

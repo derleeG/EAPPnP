@@ -31,9 +31,9 @@ if __name__ == '__main__':
     iso_rot, iso_trans = [], []
     aniso_err, iso_err = [], []
 
-    sig_range = range(1, 11)
+    sig_range = range(0, 21)
     for sig_max in sig_range:
-        sigma = np.array(range(0, sig_max), dtype=np.float32)/focal_length
+        sigma = np.array(range(0, sig_max+1), dtype=np.float32)/focal_length
         ratio = np.ones_like(sigma)/sigma.size
 
         # for comparison we are testing on isotropic data
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     plt.figure()
     plt.scatter(sig_range, aniso_rot, marker='^', label='EAPPnP')
     plt.scatter(sig_range, iso_rot, marker='o', label='EPPnP')
-    plt.ylim(ymax=1)
+    plt.ylim(ymin=0, ymax=3)
     plt.xlabel("max gaussian image noise (pixel)")
     plt.ylabel("mean rotation error (deg)")
     plt.legend()
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     plt.figure()
     plt.scatter(sig_range, aniso_trans, marker='^', label='EAPPnP')
     plt.scatter(sig_range, iso_trans, marker='o', label='EPPnP')
-    plt.ylim(ymax=1)
+    plt.ylim(ymin=0, ymax=3)
     plt.xlabel("max gaussian image noise (pixel)")
     plt.ylabel("mean translation error (%)")
     plt.legend()
