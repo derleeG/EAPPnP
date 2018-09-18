@@ -9,12 +9,10 @@ We first want to make sure our implementation of EPPnP is correct and comparable
 
 ## Ordinary PnP
 ### execution time
-![alt text](https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_time.png "Execution time plot")
+<img src="https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_time.png" width="400" height="300">
 
 ### Error with varying point set size
-![alt text](https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_mix_gaussian_rot.png "Fix noise rotation error plot") 
-![alt text](https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_mix_gaussian_trans.png "Fix noise translation error plot")
+<img src="https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_mix_gaussian_rot.png" width="400" height="300"><img src="https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_mix_gaussian_trans.png" width="400" height="300">
 
 ### Error with varying noise level
-![alt text](https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_max_gaussian_rot.png "Fix noise rotation error plot") 
-![alt text](https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_max_gaussian_trans.png "Fix noise translation error plot")
+<img src="https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_max_gaussian_rot.png" width="400" height="300"><img src="https://github.com/derleeG/EAPPnP/blob/master/fig/Figure_max_gaussian_trans.png" width="400" height="300">
