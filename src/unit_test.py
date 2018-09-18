@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 import EAPPnP
 
 N = 1000
-
+M = 80
 
 def flatten(X):
     mX = np.mean(X, -1, keepdims=True)
@@ -15,86 +15,73 @@ def flatten(X):
     return X
 
 
+def uniform(shape, limit=(-1, 1)):
+    x = np.random.rand(*shape).astype(np.float32)
+    x = x*(limit[1] - limit[0]) + limit[0]
+    return x
+
+
+def mix_gaussian_noise(shape, sigma, ratio):
+    n = np.random.randn(*shape).astype(np.float32)
+    r = np.nonzero(np.random.multinomial(1, ratio, shape))[-1].reshape(shape)
+    r = np.expand_dims(r[:, :, 0], -1)
+    n *= sigma[r]
+    return n
+
+
 def gen_rigid_transform(n):
-    np.random.seed(2018)
-    R = np.random.randn(n, 3, 3).astype(np.float32)
-    T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 80).astype(np.float32)
-    Y = np.zeros_like(X)
+    X, Y, R, T = gen_rigid_transform_with_gt(n)
+    return X, Y
+
+
+def gen_rigid_transform_with_gt(n):
+    #np.random.seed(2018)
+    R = uniform((n, 3, 3))
+    T = uniform((n, 3, 1))
+    Y = uniform((n, 3, M), (-2, 2))
+    X = np.zeros_like(Y)
     for r, t, x, y in zip(R, T, X, Y):
+        y[-1, :] += 6
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
-        y[...] = np.matmul(r, x) + t
-        y[-1, :] += 10
+        t[...] = np.mean(y, -1, keepdims=True)
+        x[...] = np.matmul(r.T, y-t)
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
     Y = np.swapaxes(Y, -1, -2)
 
-    return X, Y
-
-
-def gen_rigid_transform_planar(n):
-    np.random.seed(2018)
-    R = np.random.randn(n, 3, 3).astype(np.float32)
-    T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 80).astype(np.float32)
-    Y = np.zeros_like(X)
-    for r, t, x, y in zip(R, T, X, Y):
-        x[...] = flatten(x)
-        r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
-        y[...] = np.matmul(r, x) + t
-        y[-1, :] += 10
-
-    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
-    X = np.swapaxes(X, -1, -2)
-    Y = np.swapaxes(Y, -1, -2)
-
-    return X, Y
+    return X, Y, R, T
 
 
 def gen_stretched_transform(n):
-    R = np.random.randn(n, 3, 3).astype(np.float32)
+    X, Y, R, T, S = gen_stretched_transform_with_gt(n)
+    return X, Y
+
+
+def gen_stretched_transform_with_gt(n):
+    np.random.seed(2018)
+    R = uniform((n, 3, 3))
     S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
-    T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 80).astype(np.float32)
+    T = uniform((n, 3, 1))
+    X = uniform((n, 3, M), (-2, 2))
     Y = np.zeros_like(X)
     for r, s, t, x, y in zip(R, S, T, X, Y):
         s[0] = 1
         r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
+        t[-1] += 6
         y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 40000
 
     Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
     X = np.swapaxes(X, -1, -2)
     Y = np.swapaxes(Y, -1, -2)
 
-    return X, Y
-
-
-def gen_stretched_transformi_planar(n):
-    R = np.random.randn(n, 3, 3).astype(np.float32)
-    S = np.exp(np.random.randn(n, 3).astype(np.float32)/2)
-    T = np.random.randn(n, 3, 1).astype(np.float32)
-    X = np.random.randn(n, 3, 80).astype(np.float32)
-    Y = np.zeros_like(X)
-    for r, s, t, x, y in zip(R, S, T, X, Y):
-        x[...] = flatten(x)
-        s[0] = 1
-        r[...] = EAPPnP.procrutes.np_orthogonal_polar_factor(r)
-        y[...] = np.matmul(r*s, x) + t
-        y[-1, :] += 40000
-
-    Y = Y[:,:-1,:]/np.expand_dims(Y[:,-1,:], 1)
-    X = np.swapaxes(X, -1, -2)
-    Y = np.swapaxes(Y, -1, -2)
-
-    return X, Y
+    return X, Y, R, T, S
 
 
 def get_func(method):
     if method == 'EAPPnP':
         func = EAPPnP.EAPPnP
-        data_func = gen_rigid_transform
+        data_func = gen_stretched_transform
         transform = lambda x, o: np.matmul(o[0]*o[2], x.T) + o[1]
         project = lambda x: x[:-1, :]/x[-1,:]
         stat_func = lambda x, y, o: (x, y,\
