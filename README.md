@@ -3,9 +3,7 @@ Perspective n point method for 3D structure with unknown stretching
 
 Here is an example using this package to find the optimal parameters (ROI patch resolution, keypoint set size, etc.) for estimating 3D bounding box with keypoint-RCNN.
 
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=odATaEoo7lg
-" target="_blank"><img src="http://img.youtube.com/vi/odATaEoo7lg/0.jpg" 
-alt="IMAGE ALT TEXT HERE" width="960" height="540" border="10" /></a>
+[![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/odATaEoo7lg/0.jpg)](http://www.youtube.com/watch?v=odATaEoo7lg)
 
 # Method and Purpose
 This algorithm is proposed to solve a generalized version of the well-known Perspective-n-Point(PnP) problem that tries to recover not only the pose but also the scaling vector assuming the known 3D structure has undergone some uneven stretching along the 3 axis in space. The method is based on a state-of-the-art PnP solution called Efficient Procrutes PnP (EPPnP) (You see where the name comes from, see http://digital.csic.es/bitstream/10261/127304/6/Outlier-Rejection.pdf for details). To solve the generalized PnP problem we modified the Efficient Procrutes PnP to solve the anisotropic Procrutes problem instead of the original isotropic Procrutes problem. The additional 2 degree of freedom (scaling along 3 axis, but up to a scale) can be resolve using the same procedure as the original paper.
