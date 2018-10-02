@@ -59,8 +59,6 @@ def kernel_PnP(Cw, Km, iter_num=10):
     find R, t and S such that ||RSCw + t - Cc||^2 is minimized
     '''
 
-    KmQ, _ = np.linalg.qr(Km)
-
     X = Cw.T
     cX, mX = centralize(X, -1)
     Y = Km[:,-1].reshape(-1, 3).T
@@ -78,7 +76,7 @@ def kernel_PnP(Cw, Km, iter_num=10):
         Y = np.matmul(R, cX) + mY/s
 
         # project into the effective null space of M
-        Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
+        Y = np.matmul(Km, np.matmul(Km.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
         newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True)) - cX)
         if it > 1 and newerr > err*0.95:
             break
@@ -96,8 +94,6 @@ def generalized_kernel_PnP(Cw, Km, iter_num=10):
     find R, t and S such that ||RSCw + t - Cc||^2 is minimized
     '''
 
-    KmQ, _ = np.linalg.qr(Km)
-
     X = Cw.T
     cX, mX = centralize(X, -1)
     Y = Km[:,-1].reshape(-1, 3).T
@@ -112,11 +108,11 @@ def generalized_kernel_PnP(Cw, Km, iter_num=10):
     S *= Ynorm
 
     for it in range(iter_num):
-        scale = 1/(1/S).mean()
+        scale = np.cbrt(np.prod(S))
         Y, S = (np.matmul(R*S, cX) + mY)/scale, S/scale
 
         # project into the effective null space of M
-        Y = np.matmul(KmQ, np.matmul(KmQ.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
+        Y = np.matmul(Km, np.matmul(Km.T, (Y.T).reshape(-1, 1))).reshape(-1, 3).T
         newerr = np.linalg.norm(np.matmul(R.T, Y-Y.mean(-1, keepdims=True))/S.reshape(-1, 1) - cX)
         if it > 1 and newerr > err*0.95:
             break
@@ -125,7 +121,8 @@ def generalized_kernel_PnP(Cw, Km, iter_num=10):
         R, S = procrutes.anisotropic_procrutes(cX, cY, S, 5)
 
     R, S = procrutes.anisotropic_procrutes(cX, cY, S, 15)
-    T, S = (mY - np.matmul(R*S, mX))/S[0], S/S[0]
+    scale = np.cbrt(np.prod(S))
+    T, S = (mY - np.matmul(R*S, mX))/scale, S/scale
 
     return R, T, S, err
 
