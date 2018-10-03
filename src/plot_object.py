@@ -31,7 +31,6 @@ def OBBIOU(OBB1, OBB2):
     return I/U if I != 0 else 0
 
 
-
 def OBBintersection(OBB1, OBB2):
     R1, T1, S1 = OBB1
     R2, T2, S2 = OBB2
@@ -265,6 +264,19 @@ def draw_result_list(results, view):
     return view
 
 
+def print_result(result_list):
+    result_list = np.array(result_list)
+    plt.figure(1)
+    plt.scatter(result_list[:, 2], result_list[:, -1])
+    plt.xlabel('radius')
+    plt.ylabel('recall(0.7)')
+    plt.figure(2)
+    plt.scatter(result_list[:, 2], result_list[:, -2])
+    plt.xlabel('radius')
+    plt.ylabel('IOU')
+    plt.show()
+
+
 def cal_rot_err(R_gt, R):
     err = []
     for r_gt, r in zip(R_gt, R):
@@ -343,6 +355,31 @@ def roi_discretize2(p, box, res, r):
     return p
 
 
+def draw_info():
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    text = ['Camera View',
+            'Ground Truth',
+            'Discretized Ground Truth',
+            'Estimated',
+            'Image resolution: {}x{}'.format(image_size[1], image_size[0]),
+            'Focal length: {} pix/m'.format(f),
+            'ROI resolution: {}x{}'.format(roi_res, roi_res),
+            '# Points: {0}'.format(point_set),
+            'Cuboid size: {:.3f}x{:.3f}x{:.3f}'.format(S_gt[0]*2, S_gt[1]*2, S_gt[2]*2),
+            'Cuboid center: ({:.3f}, {:.3f}, {:.3f})'.format(T_gt[0], T_gt[1], T_gt[2]),
+            'Method: {}'.format(func.__name__),
+            'Rotation error: {:.3f} deg'.format(rot_err),
+            'Translation error: {:.3f} %'.format(trans_err),
+            'IOU: {:.3f}'.format(IOU),
+            'Recall0.7: {:.3f} %'.format((IOU>0.7)*100),
+            'Average Rotation error: {:.3f} deg'.format(rot_err_sum/frame_count),
+            'Average Translation error: {:.3f} %'.format(trans_err_sum/frame_count),
+            'Average IOU: {:.3f}'.format(IOU_sum/frame_count),
+            'Average Recall0.7: {:.3f} %'.format(recall_sum/frame_count)]
+
+
+
 if __name__ == '__main__':
 
     # build reference P
@@ -372,7 +409,6 @@ if __name__ == '__main__':
     #exp_list = exp_list*20
     result_list = []
 
-
     if write_video:
         writer = skvideo.io.FFmpegWriter('result.mp4', {'-r': '60'}, {'-r': '60'})
 
@@ -391,7 +427,6 @@ if __name__ == '__main__':
             except:
                 break
             X = gen_point_on_box(point_set, gen_mode)
-            #X = X[:5, :]
             point_set = X.shape[0]
 
             rot_err_sum = 0
@@ -402,7 +437,12 @@ if __name__ == '__main__':
             result_list.append([roi_res, point_set, radius, 0, 0, 0, 0])
 
         R_gt, T_gt, S_gt = next(rng)
+
+        # stereo setting
         Y_gt = np.matmul(X*S_gt, R_gt.T) + T_gt
+
+        # split point into two sets
+        Y_gtl
         p_gt = perspective_project(Y_gt)
         box = find_2D_bounding_box(p_gt)
 
@@ -509,14 +549,5 @@ if __name__ == '__main__':
             if write_video:
                 writer.writeFrame(vis)
 
-    result_list = np.array(result_list)
+    print_result(result_list)
 
-    plt.figure(1)
-    plt.scatter(result_list[:, 2], result_list[:, -1])
-    plt.xlabel('radius')
-    plt.ylabel('recall(0.7)')
-    plt.figure(2)
-    plt.scatter(result_list[:, 2], result_list[:, -2])
-    plt.xlabel('radius')
-    plt.ylabel('IOU')
-    plt.show()

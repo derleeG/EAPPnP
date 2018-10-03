@@ -43,8 +43,7 @@ def EAPPnPMCS(P, p, t):
     cP, mP = centralize(P, 0)
     M, Cw, Alph = prepare_data(cP, p)
     b = prepare_offset(p, -t)
-    Km, U, s, Vt = kernel_noise_full(M, 4)
-    Cc = np.matmul(np.matmul(b.T, U)/s, Vt).T
+    Vt, Cc = kernel_noise_full(M, b, 4)
     R, T, S, err = generalized_kernel_PnP_MCS(Cw, Cc, Km)
     T = T - np.matmul(R*S, np.reshape(mP, (-1, 1)))
 
@@ -116,9 +115,10 @@ def kernel_noise(M, dims):
     return Vt.T[:, -dims:]
 
 
-def kernel_noise_full(M, dims):
+def kernel_noise_full(M, b, dims):
     U, s, Vt = np.linalg.svd(M, full_matrices=M.shape[0] < M.shape[1])
-    return Vt.T[:, -dims:], U, s, Vt
+    Cc = np.matmul(np.matmul(b.T, U)/s, Vt[:s.size,:]).T
+    return Vt.T[:, -dims:], Cc
 
 
 def kernel_PnP(Cw, Km, iter_num=10):
