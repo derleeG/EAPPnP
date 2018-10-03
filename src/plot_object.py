@@ -133,7 +133,9 @@ def uniform_generator(limit=(-1, 1)):
 
 def RTS_state_generator(correlated=True):
     # parameters for the random motion
-    limits = [(-2, 2), (-2, 2), (-2, 2), (-4, 4), (-3, 3), (0.4, 5), (-1, 1), (-1, 1)]
+    limits = [(-2, 2), (-2, 2), (-2, 2),  # random rotation
+              (-4, 4), (-3, 3), (0.4, 5), # random translation
+              (-1, 1), (-1, 1), (-1, 1)]  # random scaling
 
     if correlated:
         rngs = [correlated_uniform_generator(limit) for limit in limits]
@@ -144,7 +146,8 @@ def RTS_state_generator(correlated=True):
         r = cv2.Rodrigues(np.array(state[:3]))[0].astype(np.float32)
         t = np.array(state[3:6], dtype=np.float32)
         t[-1] *= 15
-        s = np.power(2, np.array([0, *state[6:]])).astype(np.float32)
+        s = np.power(2, np.array(state[6:])).astype(np.float32)
+        s /= np.cbrt(np.prod(s))
 
         yield r, t, s
 
@@ -357,8 +360,8 @@ if __name__ == '__main__':
                 (7, 5), (14, 5), (28, 5), (56, 5), (112, 5), (224, 5)]
     exp_list = []
 
-    #for a in [4.88, 0]:
-    for a in np.linspace(0.71, 6.5, 1000):
+    for a in [0, 4.875]:
+    #for a in np.linspace(4.874, 4.876, 10):
         for m in [1]:
             for r in [56]:
                 for n in [5]:
@@ -366,6 +369,7 @@ if __name__ == '__main__':
                     n2 = (temp.shape[0] + 16)//12
                     exp_list.append((r, n2, 2, a))
                     #exp_list.append((r, n, 1, a))
+    #exp_list = exp_list*20
     result_list = []
 
 
@@ -387,6 +391,7 @@ if __name__ == '__main__':
             except:
                 break
             X = gen_point_on_box(point_set, gen_mode)
+            #X = X[:5, :]
             point_set = X.shape[0]
 
             rot_err_sum = 0
