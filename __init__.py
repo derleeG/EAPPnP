@@ -1,3 +1,3 @@
-from .src.EAPPnPSolver import EAPPnP, EPPnP, procrutes
+from .src.EAPPnPSolver import EAPPnP, EPPnP, EAPPnPMCS, procrutes
 del lib
 del src
