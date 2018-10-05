@@ -6,6 +6,7 @@ import skvideo.io
 import scipy.spatial
 import matplotlib.pyplot as plt
 from functools import partial
+import torch
 
 REF = []
 for i in [-1, 1]:
@@ -63,8 +64,8 @@ def OBBintersection(OBB1, OBB2):
                     tl.append(t)
                 else:
                     te.append(t)
-            te = max(0, max(te))
-            tl = min(1, min(tl))
+            te = max(0, max(te)) if te else 2
+            tl = min(1, min(tl)) if tl else -1
 
             if tl >= te:
                 P.append(p0 + te*(p1-p0))
@@ -242,15 +243,16 @@ def roi_discretize2(p, box, res, r):
     p = (p - offset)/scale*res - 0.5
     p = float_to_float(p, r, res)
     p = (p + 0.5)/res*scale + offset
+    p = p.astype(np.float32)
 
     return p
 
 
 def discretization_err(p, box, res, radius):
     if radius < 2**0.5/2:
-        p_noise = roi_discretize(p_gt, box, roi_res)
+        p_noise = roi_discretize(p, box, roi_res)
     else:
-        p_noise = roi_discretize2(p_gt, box, roi_res, radius)
+        p_noise = roi_discretize2(p, box, roi_res, radius)
     return p_noise
 
 
@@ -262,28 +264,58 @@ def gen_projection(state, X):
     return Y, p, box,
 
 
-def gen_obeservation(state, X, mode, noise_func):
+def gen_observation(state, X, mode, noise_func):
     R, T, S = state
     if mode == 'mono':
         _, p, box = gen_projection(state, X)
         p_noise = noise_func(p, box)
+
+        return X, p_noise
     elif mode == 'stereo':
-        pass
-
-
+        T_offset = np.array([0.54, 0, 0], dtype=np.float32)
+        #X_l = X[::2, :]
+        X_l = X
+        _, p_l, box_l = gen_projection((R, T, S), X_l)
+        p_noise_l = noise_func(p_l, box_l)
+        t_l = np.zeros(X_l.shape, dtype=np.float32)
+        #X_r = X[1::2, :]
+        X_r = X
+        _, p_r, box_r = gen_projection((R, T - T_offset, S), X_r)
+        p_noise_r = noise_func(p_r, box_r)
+        t_r = np.zeros(X_r.shape, dtype=np.float32)
+        t_r[:, 0] = T_offset[0]
+        return X_l, p_noise_l, t_l, X_r, p_noise_r, t_r
     else:
         print('unknown mode for observation')
-
-    return X, p_noise
 
 
 def estimate_state(data, pnp_func):
 
     if pnp_func.__name__ == 'EAPPnP':
         R, T, S, _ = pnp_func(*data)
+    elif pnp_func.__name__ == 'EAPPnPMCS':
+        X_l, p_noise_l, t_l, X_r, p_noise_r, t_r = data
+        X = np.concatenate((X_l, X_r), 0);
+        p_noise = np.concatenate((p_noise_l, p_noise_r), 0);
+        t = np.concatenate((t_l, t_r), 0);
+        R, T, S, _ = pnp_func(X, p_noise, t)
     elif pnp_func.__name__ == 'EPPnP':
         R, T, _ = pnp_func(*data)
         S = 1
+    elif pnp_func.__name__ == 'EAPPnPMCStr':
+        X_l, p_noise_l, t_l, X_r, p_noise_r, t_r = data
+        X = np.concatenate((X_l, X_r), 0);
+        p_noise = np.concatenate((p_noise_l, p_noise_r), 0);
+        t = np.concatenate((t_l, t_r), 0);
+        X = torch.from_numpy(X)
+        p_noise = torch.from_numpy(p_noise)
+        t = torch.from_numpy(t)
+        R, T, S, _ = pnp_func(X, p_noise, t)
+        R = R.numpy()
+        T = T.numpy()
+        S = S.numpy()
+
+
 
     return R, T.T, S
 
@@ -313,10 +345,10 @@ def update_result_list(result_list, stats):
     result_list[-1][-1] = stats[3]/stats[-1]
 
 
-def gen_vis(state, est_state, data, result_list, stat, config):
+def gen_vis(state, est_state, data, camera_mode, result_list, stat, config):
 
 
-    p_view = gen_perspective_view(state, est_state, data, config[0], config[1])
+    p_view = gen_perspective_view(state, est_state, data[0:2], config[0], config[1])
     t_view = gen_orthogonal_view(state, est_state, data[0], image_size, 1)
     s_view = gen_orthogonal_view(state, est_state, data[0], image_size, 0)
     f_view = gen_orthogonal_view(state, est_state, data[0], image_size, 2)
@@ -328,7 +360,7 @@ def gen_vis(state, est_state, data, result_list, stat, config):
     cv2.putText(p_view,'Discretized Ground Truth',\
             (15,75), font, 0.4,(255,100,100),1,cv2.LINE_AA)
     cv2.putText(p_view,'Estimated',(15,90), font, 0.4,(100,100,255),1,cv2.LINE_AA)
-    draw_info(p_view, config, stat, result_list, state):
+    draw_info(p_view, config, stat, result_list, state)
     cv2.putText(t_view,'Top View',(15,30), font, 0.5,(255,255,255),1,cv2.LINE_AA)
     cv2.putText(s_view,'Side View',(15,30), font, 0.5,(255,255,255),1,cv2.LINE_AA)
     cv2.putText(f_view,'Front View',(15,30), font, 0.5,(255,255,255),1,cv2.LINE_AA)
@@ -436,6 +468,8 @@ def gen_orthogonal_view(OBB_gt, OBB, X, image_size, dim):
 
 
 def draw_result_list(results, view):
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
     for idx, (roi_res, point_set, radius, rot_err, trans_err, iou, recall) \
             in enumerate(results):
         color = (255, 255, 255) if idx != len(results)-1 else (100, 100, 255)
@@ -453,11 +487,11 @@ def draw_result_list(results, view):
 def plot_result(result_list):
     result_list = np.array(result_list)
     plt.figure(1)
-    plt.scatter(result_list[:, 2], result_list[:, -1])
+    plt.scatter(result_list[:, 1], result_list[:, -1])
     plt.xlabel('radius')
     plt.ylabel('recall(0.7)')
     plt.figure(2)
-    plt.scatter(result_list[:, 2], result_list[:, -2])
+    plt.scatter(result_list[:, 1], result_list[:, -2])
     plt.xlabel('radius')
     plt.ylabel('IOU')
     plt.show()
@@ -498,7 +532,7 @@ if __name__ == '__main__':
     image_size = (360, 640) # 1/3 of full HD
     image_size = (540, 960) # 1/3 of full HD
     f = 712 # approximately the same field of view as Iphone 6
-    func = EAPPnP.EAPPnP
+    func = EAPPnP.EAPPnPMCS
     trail_num = 3000
     visualize = False
     write_video = False
@@ -511,22 +545,25 @@ if __name__ == '__main__':
     if write_video:
         writer = skvideo.io.FFmpegWriter('result.mp4', {'-r': '60'}, {'-r': '60'})
 
+    exp_list = []
     # experiment settings
-    for a in [0, 4.875]:
+    for a in [1.335]:
         for m in [1]:
             for r in [56]:
-                for n in [5]:
-                    temp = gen_point_on_box(n, m)
-                    n2 = (temp.shape[0] + 16)//12
-                    exp_list.append((r, n2, 2, a))
-                    #exp_list.append((r, n, 1, a))
-
+                for n in range(6, 81, 4):
+                    #temp = gen_point_on_box(n, m)
+                    #n2 = (temp.shape[0] + 16)//12
+                    #exp_list.append((r, n2, 2, a))
+                    exp_list.append((r, n, 1, a))
+    exp_list *= 5
     result_list = []
+    stop_flag = False
 
     for exp in exp_list:
         roi_res, point_set, gen_mode, radius = exp
 
-        X = gen_point_on_box(point_set, gen_mode)
+        #X = gen_point_on_box(point_set, gen_mode)
+        X = gen_point_on_box2(point_set)
         point_set = X.shape[0]
         stats = [0, 0, 0, 0, 0]
         result_list.append([roi_res, point_set, radius, 0, 0, 0, 0])
@@ -535,18 +572,19 @@ if __name__ == '__main__':
         for idx in range(trail_num):
             state = next(rng)
             data = gen_observation(state, X, camera_mode, noise_func)
-            est_state = estimate_state(data, pnp_func)
+            est_state = estimate_state(data, func)
             stat = calculate_stat(state, est_state)
             stats = accumulate_stats(stats, stat)
             update_result_list(result_list, stats)
 
             if visualize:
                 # visualize
-                vis = gen_vis(state, est_state, data, result_list, stat, \
-                        (image_size, f, roi_res, point_set, func)):
+                vis = gen_vis(state, est_state, data, \
+                        camera_mode, result_list, stat, \
+                        (image_size, f, roi_res, point_set, func))
                 cv2.imshow('vis', vis)
-                q = cv2.waitKey(10)
-                if q == 27:
+                stop_flag = cv2.waitKey(10) == 27
+                if stop_flag:
                     break
                 if write_video:
                     writer.writeFrame(vis)
@@ -555,6 +593,7 @@ if __name__ == '__main__':
                 'rotation err: {:.3f}, translation err: {:.3f}, '
                 'IOU: {:.3f}, Recall0.7: {:.3f}')\
                         .format(*result_list[-1]))
-
+        if stop_flag:
+            break
     plot_result(result_list)
 

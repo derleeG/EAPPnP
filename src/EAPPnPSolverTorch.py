@@ -23,7 +23,6 @@ def EAPPnPMCS(P, p, t):
     p: nx2 matrix, points in camera coordinates
     t: nx3 matrix, offset between cameras for each point
     '''
-
     cP, mP = centralize(P, 0)
     M, Cw, Alph = prepare_data(cP, p)
     b = prepare_offset(p, -t)
@@ -35,7 +34,6 @@ def EAPPnPMCS(P, p, t):
 
 
 def prepare_data(P, p):
-
     Cw = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]).to(P)
     Alph = torch.cat((P, 1-P.sum(-1, keepdim=True)), -1)
     _Alph = Alph.view(-1, 1)
@@ -115,7 +113,7 @@ def generalized_kernel_PnP_MCS(Cw, Cc, Km, iter_num=10):
 
     X = Cw.t()
     cX, mX = centralize(X, -1)
-    Y = Cc.reshape(-1, 3).T
+    Y = Cc.reshape(-1, 3).t()
     if Y[-1,:].mean() < 0:
         # control points should be in front of the camera
         Y = -Y
@@ -124,11 +122,10 @@ def generalized_kernel_PnP_MCS(Cw, Cc, Km, iter_num=10):
     R, S = procrutes.anisotropic_procrutes(cX, cY)
 
     for it in range(iter_num):
-        scale = torch.prod(S).pow(1/3)
-        Y, S = ((R*S).mm(cX) + mY)/scale, S/scale
+        Y = (R*S).mm(cX) + mY
 
         # project into the effective null space of M
-        Y = (Km.mm(Km.t().mm(Y.t().view(-1, 1) - Cc)) + Cc).reshape(-1, 3).t()
+        Y = (Km.mm(Km.t().mm(Y.t().reshape(-1, 1) - Cc)) + Cc).reshape(-1, 3).t()
         newerr = torch.norm(R.t().mm(Y-Y.mean(-1, keepdim=True))/S.view(-1, 1) - cX)
         if it > 1 and newerr > err*0.95:
             break
@@ -137,8 +134,7 @@ def generalized_kernel_PnP_MCS(Cw, Cc, Km, iter_num=10):
         R, S = procrutes.anisotropic_procrutes(cX, cY, S, 5)
 
     R, S = procrutes.anisotropic_procrutes(cX, cY, S, 15)
-    scale = torch.prod(S).pow(1/3)
-    T, S = (mY - (R*S).mm(mX))/scale, S/scale
+    T = (mY - (R*S).mm(mX))
 
     return R, T, S, err
 
@@ -167,8 +163,8 @@ class procrutes:
     def orthogonal_polar_factor(A):
         U, S, V = torch.svd(A)
         S = torch.ones_like(S)
-        D[-1] = U.mm(V.t()).det().sign()
-        R = (U*D).mm(V.t())
+        S[-1] = U.mm(V.t()).det().sign()
+        R = (U*S).mm(V.t())
 
         return R
 
