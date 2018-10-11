@@ -293,31 +293,27 @@ def estimate_state(data, pnp_func):
 
     if pnp_func.__name__ == 'EAPPnP':
         R, T, S, _ = pnp_func(*data)
+        T = T.T
     elif pnp_func.__name__ == 'EAPPnPMCS':
         X_l, p_noise_l, t_l, X_r, p_noise_r, t_r = data
         X = np.concatenate((X_l, X_r), 0);
         p_noise = np.concatenate((p_noise_l, p_noise_r), 0);
         t = np.concatenate((t_l, t_r), 0);
         R, T, S, _ = pnp_func(X, p_noise, t)
+        T = T.T
     elif pnp_func.__name__ == 'EPPnP':
         R, T, _ = pnp_func(*data)
+        T = T.T
         S = 1
     elif pnp_func.__name__ == 'EAPPnPMCStr':
         X_l, p_noise_l, t_l, X_r, p_noise_r, t_r = data
-        X = np.concatenate((X_l, X_r), 0);
-        p_noise = np.concatenate((p_noise_l, p_noise_r), 0);
-        t = np.concatenate((t_l, t_r), 0);
-        X = torch.from_numpy(X)
-        p_noise = torch.from_numpy(p_noise)
-        t = torch.from_numpy(t)
+        X = torch.cat((X_l, X_r), 0);
+        p_noise = torch.cat((p_noise_l, p_noise_r), 0);
+        t = torch.cat((t_l, t_r), 0);
         R, T, S, _ = pnp_func(X, p_noise, t)
-        R = R.numpy()
-        T = T.numpy()
-        S = S.numpy()
+        T = T.t()
 
-
-
-    return R, T.T, S
+    return R, T, S
 
 
 def calculate_stat(state, est_state):
@@ -377,7 +373,7 @@ def draw_perspective_point(p, f, img, color):
     y, x, _ = img.shape
     imp = p*f + np.array([x/2, y/2])
     for x, y in imp.astype(np.int32):
-        cv2.circle(img, (x, y), 3, color, -1, cv2.LINE_AA)
+        cv2.circle(img, (x, y), 2, color, -1, cv2.LINE_AA)
 
     return
 
@@ -448,22 +444,23 @@ def gen_orthogonal_view(OBB_gt, OBB, X, image_size, dim):
     view_setting = gen_orthogonal_view_setting(\
             B_gt, dim, image_size[0]/2)
     view = np.zeros((*image_size, 3), dtype=np.uint8)
+
+    b_gt = draw_orthogonal_point(B_gt, view_setting, view, (0, 0, 0))
+    b = draw_orthogonal_point(B, view_setting, view, (0, 0, 0))
     draw_orthogonal_point(Y_gt, view_setting, view, (255, 255, 255))
-    draw_orthogonal_point(Y, view_setting, view, (100, 100, 255))
-    b_gt = draw_orthogonal_point(B_gt, view_setting, view, (255, 255, 255))
-    b = draw_orthogonal_point(B, view_setting, view, (100, 100, 255))
+    #draw_orthogonal_point(Y, view_setting, view, (100, 100, 255))
 
     b_gt = b_gt.astype(np.int32)
     b = b.astype(np.int32)
     for i, j in LINKS:
-        cv2.line(view, (b_gt[i, 0], b_gt[i, 1]), (b_gt[j, 0], b_gt[j, 1]), (150, 150, 150), 1)
+        #cv2.line(view, (b_gt[i, 0], b_gt[i, 1]), (b_gt[j, 0], b_gt[j, 1]), (150, 150, 150), 1)
         cv2.line(view, (b[i, 0], b[i, 1]), (b[j, 0], b[j, 1]), (60, 60, 150), 1)
-
+    '''
     view[:,0,:] = 255
     view[0,:,:] = 255
     view[:,-1,:] = 255
     view[-1,:,:] = 255
-
+    '''
     return view
 
 
@@ -488,14 +485,13 @@ def plot_result(result_list):
     result_list = np.array(result_list)
     plt.figure(1)
     plt.scatter(result_list[:, 1], result_list[:, -1])
-    plt.xlabel('# of points')
+    plt.xlabel('radius')
     plt.ylabel('recall(0.7)')
     plt.figure(2)
     plt.scatter(result_list[:, 1], result_list[:, -2])
-    plt.xlabel('# of points')
+    plt.xlabel('radius')
     plt.ylabel('IOU')
     plt.show()
-
 
 
 def draw_info(view, config, stat, result_list, state):
@@ -533,9 +529,9 @@ if __name__ == '__main__':
     image_size = (360, 640) # 1/3 of full HD
     image_size = (540, 960) # 1/3 of full HD
     f = 712 # approximately the same field of view as Iphone 6
-    func = EAPPnP.EAPPnPMCS
-    trail_num = 600
-    visualize = True
+    func = EAPPnP.EAPPnPMCStr
+    trail_num = 300000
+    visualize = False
     write_video = True
 
     if 'MCS' in func.__name__:
@@ -544,21 +540,18 @@ if __name__ == '__main__':
         camera_mode = 'mono'
     rng = RTS_state_generator(correlated=visualize)
     if write_video:
-        writer = skvideo.io.FFmpegWriter('result.mp4', {'-r': '60'}, {'-r': '60'})
+        writer = skvideo.io.FFmpegWriter('result.mp4', {'-r': '20'}, {'-r': '20'})
 
     exp_list = []
     # experiment settings
     for a in [0]:
-        for m in [2]:
-            for r in [56]:
-                #for n in range(6, 81, 4):
-                for n in [2]:
-                    temp = gen_point_on_box(n, m)
-                    if temp.shape[0] > 81:
-                        break
+        for m in [1]:
+            for r in [56*8]:
+                for n in [40]:
+                    #temp = gen_point_on_box(n, m)
                     #n2 = (temp.shape[0] + 16)//12
                     #exp_list.append((r, n2, 2, a))
-                    exp_list.append((r, n, m, a))
+                    exp_list.append((r, n, 1, a))
     #exp_list *= 5
     result_list = []
     stop_flag = False
@@ -566,41 +559,99 @@ if __name__ == '__main__':
     for exp in exp_list:
         roi_res, point_set, gen_mode, radius = exp
 
-        if gen_mode > 3:
-            X = gen_point_on_box2(point_set)
-        else:
-            X = gen_point_on_box(point_set, gen_mode)
+        #X = gen_point_on_box(point_set, gen_mode)
+        X = gen_point_on_box2(point_set)
         point_set = X.shape[0]
         stats = [0, 0, 0, 0, 0]
         result_list.append([roi_res, point_set, radius, 0, 0, 0, 0])
         noise_func = partial(discretization_err, res=roi_res, radius=radius)
 
-        for idx in range(trail_num):
-            state = next(rng)
-            data = gen_observation(state, X, camera_mode, noise_func)
-            est_state = estimate_state(data, func)
-            stat = calculate_stat(state, est_state)
-            stats = accumulate_stats(stats, stat)
-            update_result_list(result_list, stats)
 
-            if visualize:
+        Xtr = torch.from_numpy(X).requires_grad_(True)
+        X = Xtr.clone().detach()
+        optimizer = torch.optim.Adam([Xtr], lr = 0.01)
+        REFtr = torch.from_numpy(REF)
+        R, T, S = next(rng)
+        S[:] = 1
+        state0 = (R, T, S)
+
+        for idx in range(trail_num):
+
+            optimizer.zero_grad()
+            loss = 0
+            for _ in range(10):
+                state = next(rng)
+
+                data = gen_observation(state, X.numpy(), camera_mode, noise_func)
+                _, p_noise_l, t_l, _, p_noise_r, t_r = data
+                p_noise_l = torch.from_numpy(p_noise_l)
+                p_noise_r = torch.from_numpy(p_noise_r)
+                t_l = torch.from_numpy(t_l)
+                t_r = torch.from_numpy(t_r)
+                Xc = torch.cat((Xtr, Xtr), 0);
+                p_noisec = torch.cat((p_noise_l, p_noise_r), 0);
+                t = torch.cat((t_l, t_r), 0);
+                Cw, Cc, Km = EAPPnP.EAPPnPMCSCtrltr(Xc, p_noisec, t)
+                R, T, S = state
+                R, T, S = torch.from_numpy(R), torch.from_numpy(T), torch.from_numpy(S)
+                Y = (Cw*S).mm(R.t()) + T
+                Y = Y.reshape(-1, 1)
+                est = Km.mm(Km.t().mm(Y - Cc)) + Cc
+                print((Y-est).abs().sum().detach(), (Y-Cc).abs().sum().detach())
+
+                loss += torch.nn.functional.mse_loss(Y, Cc)
+
+            print(loss.data.item())
+            loss.backward()
+            #print(Xtr)
+            #print(Xtr.grad)
+            optimizer.step()
+            temp = Xtr.data.numpy()
+            temp[temp > 1] = 1
+            temp[temp < -1] = -1
+            X = Xtr.clone().detach()
+
+            for _ in range(100):
+                state = next(rng)
+                data = gen_observation(state, X.numpy(), camera_mode, noise_func)
+                est_state = estimate_state(data, EAPPnP.EAPPnPMCS)
+                stat = calculate_stat(state, est_state)
+                stats = accumulate_stats(stats, stat)
+                update_result_list(result_list, stats)
+
+            if visualize or True:
                 # visualize
-                vis = gen_vis(state, est_state, data, \
-                        camera_mode, result_list, stat, \
-                        (image_size, f, roi_res, point_set, func))
+                
+                
+                t_view = gen_orthogonal_view(state0, state0, X.numpy(), (540, 320), 1)
+                s_view = gen_orthogonal_view(state0, state0, X.numpy(), (540, 320), 0)
+                f_view = gen_orthogonal_view(state0, state0, X.numpy(), (540, 320), 2)
+                '''
+                f_view = gen_orthogonal_view(
+                        (np.eye(3), np.ones(3), np.ones(3)),\
+                        (np.eye(3), np.ones(3), np.ones(3)),\
+                        X.numpy(), image_size, 0)
+                '''
+                vis = np.concatenate((t_view, s_view, f_view), 1)
+                
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                cv2.putText(vis, 'Iter: {}'.format(idx),\
+                        (15, 30), font, 0.6, (255,255,255), 1, cv2.LINE_AA)
+                #vis = gen_vis(state0, state0, data, \
+                #        camera_mode, result_list, stat, \
+                #        (image_size, f, roi_res, point_set, func))
                 cv2.imshow('vis', vis)
                 stop_flag = cv2.waitKey(10) == 27
                 if stop_flag:
                     break
                 if write_video:
-                    writer.writeFrame(vis[..., ::-1])
+                    writer.writeFrame(vis)
 
-        print(('ROI res: {}, # points: {}, radius: {}, '
-                'rotation err: {:.3f}, translation err: {:.3f}, '
-                'IOU: {:.3f}, Recall0.7: {:.3f}')\
-                        .format(*result_list[-1]))
+            print(('ROI res: {}, # points: {}, radius: {}, '
+                    'rotation err: {:.3f}, translation err: {:.3f}, '
+                    'IOU: {:.3f}, Recall0.7: {:.3f}')\
+                            .format(*result_list[-1]))
         if stop_flag:
             break
     plot_result(result_list)
- 
-    np.save('result1335edge.npy', np.array(result_list))
+

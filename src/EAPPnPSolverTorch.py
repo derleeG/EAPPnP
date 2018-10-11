@@ -33,6 +33,20 @@ def EAPPnPMCS(P, p, t):
     return R, T, S, err
 
 
+def EAPPnPMCSCtrl(P, p, t):
+    '''
+    P: nx3 matrix, points in world coordinates
+    p: nx2 matrix, points in camera coordinates
+    t: nx3 matrix, offset between cameras for each point
+    '''
+    cP, mP = centralize(P, 0)
+    M, Cw, Alph = prepare_data(cP, p)
+    b = prepare_offset(p, -t)
+    Km, Cc = kernel_noise_full(M, b, 4)
+
+    return Cw, Cc, Km
+
+
 def prepare_data(P, p):
     Cw = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]).to(P)
     Alph = torch.cat((P, 1-P.sum(-1, keepdim=True)), -1)
